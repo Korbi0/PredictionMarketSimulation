@@ -1,8 +1,12 @@
 import random
 import numpy as np
 from scipy.stats import norm, truncnorm
+import sympy as sp
+from sympy.abc import b, x, y
 
 random.seed(1)
+
+lmsr_cost = sp.Symbol('b') * sp.log(sp.exp(sp.Symbol('x')/sp.Symbol('b')) + sp.exp(sp.Symbol('y')/sp.Symbol('b')))
 
 def lmsr_cost_function(b, x, y):
   """
@@ -68,45 +72,72 @@ def get_participant(true_value, mode, credence_distribution=truncated_distributi
     raise ValueError("mode must be binary or index")
 
 
-
-
-
-class Market():
-    def __init__(self, x, n_t, n_r, mode, exchange_fee=0., pright=0.5):
-        self.x = x
-        self.n_t = int(n_t)
-        self.n_r = int(n_r)
-        self.mode = mode
-        self.exchange_fee = exchange_fee
-        self.traders = []
-        self.prices = []
-        self.uncertainties = []
-        self.pright = pright
-        
-        for i in range(self.n_t):
-            self.traders.append(get_participant(self.x, self.mode, pright=self.pright))
-        
-        self.uncertainty = 1
-        self.uncertainties.append(self.uncertainty)
+class Market_Generic():
+  def __init__(self, traders, number_trading_rounds):
+    self.traders = traders # List of traders
+    self.yes_prices = [] # List of prices at which bets on 'yes' have been traded
+    self.no_prices = [] # List of prices at which bets on 'no' have been traded
     
-    def run(self):
-        for i in range(self.n_r):
-            seller, buyer = random.sample(self.traders, 2)
 
-            if seller.expected_income_of_share > buyer.expected_income_of_share:
-                seller, buyer = buyer, seller
-            
-            proposed_price = (seller.expected_income_of_share + buyer.expected_income_of_share) / 2
+  def run(self, trading_rounds):
+    for i in range(trading_rounds):
+      trade = self.trading_round()
+      if trade is None:
+        continue
+      elif trade['direction' == 'yes']:
+        self.yes_prices.append(trade['price'])
+      elif trade['direction' == 'no']:
+        self.no_prices.append(trade['price'])
+      else:
+        raise ValueError("direction must be yes or no")
 
-            seller_price = proposed_price - self.exchange_fee
-            buyer_price = proposed_price + self.exchange_fee
-            if seller.decide_on_sell(seller_price, self.uncertainty) and buyer.decide_on_buy(buyer_price, self.uncertainty):
-                self.prices.append(proposed_price)
-                self.uncertainty = np.std(self.prices) + (1 / (len(self.prices) + 1))
-                self.uncertainties.append(self.uncertainty)
+  def trading_round(self):
+    """
+    Should implement an event at which a trade may take place
+    If a trade takes place, should return a dictionary of the form
+    {'direction': 'no' or 'yes', 'price': price, 'buyer': trader1, 'seller': trader2}
+    if no trade takes place, should return None
+    """
+    raise NotImplementedError("This method must be implemented in the child class")
+    pass
+
+class DoubleAuctionMarket(Market_Generic):
+  def __init__(self, x, n_t, n_r, mode, exchange_fee=0., pright=0.5):
+      traders = [get_participant(x, mode, pright)]
+      super().__init__(traders)
+      self.x = x
+      self.n_t = int(n_t)
+      self.n_r = int(n_r)
+      self.mode = mode
+      self.exchange_fee = exchange_fee
+      self.traders = []
+      self.prices = []
+      self.uncertainties = []
+      self.pright = pright
+
+      
+      self.uncertainty = 1
+      self.uncertainties.append(self.uncertainty)
+    
+  def trading_round(self):
+      seller, buyer = random.sample(self.traders, 2)
+
+      if seller.expected_income_of_share > buyer.expected_income_of_share:
+          seller, buyer = buyer, seller
+      
+      proposed_price = (seller.expected_income_of_share + buyer.expected_income_of_share) / 2
+
+      seller_price = proposed_price - self.exchange_fee
+      buyer_price = proposed_price + self.exchange_fee
+      if seller.decide_on_sell(seller_price, self.uncertainty) and buyer.decide_on_buy(buyer_price, self.uncertainty):
+          self.uncertainty = np.std(self.prices) + (1 / (len(self.prices) + 1))
+          self.uncertainties.append(self.uncertainty)
+          return {'direction': 'yes', 'price': proposed_price, 'buyer': buyer, 'seller': seller}
+      else:
+        return None
         
-        return self.prices
-  
+    
+
 
 class Market_Participant_binary():
   """
@@ -196,18 +227,37 @@ class Market_Maker_binary():
   Market maker using a logarithmic market scoring rule
   """
 
-  def __init__(self, liquidity, payout_vector=np.array([0., 0.]), cost_function=lmsr_cost_function, initial_cash=0.):
+  def __init__(self, liquidity, payout_vector=np.array([0., 0.]), cost=lmsr_cost, initial_cash=0.):
     """
     liquidity: the liquidity parameter for the scoring function
     payout_vector: The first component records the money the market maker needs to pay out if the outcome is "no", the second component if it is "yes"
-    cost_function: the cost function to use
+    cost: the cost function to use as a sympy symbolic expression
     initial_cash: the amount of money the market maker starts with
     """
     self.liquidity = liquidity
     self.payout_vector = payout_vector
-    self.cost_function = cost_function
+    self.cost = cost
+    self.dcostdx = self.cost.diff(x)
+    self.dcostdy = self.cost.diff(y)
+    self.dcostdx_func = sp.lambdify([b, x, y], self.dcostdx)
+    self.dcostdy_func = sp.lambdify([b, x, y], self.dcostdy)
+    self.cost_function = sp.lambdify([b, x, y], self.cost)
     self.current_cost = self.cost_function(self.liquidity, self.payout_vector[0], self.payout_vector[1])
     self.current_cash = initial_cash
+
+
+
+  def get_credences(self):
+    """
+    Returns the credences of the market maker
+    the first component represents the credence in 'no', the sedcond component the credence in 'yes'
+    """
+    b = self.liquidity
+    x = - self.payout_vector[0]
+    y = - self.payout_vector[1]
+    return np.array([self.dcostdx_func(b, x, y), self.dcostdy_func(b, x, y)])
+
+   
 
   def work_with_alternative_inputs(self, direction, buysell):
     if direction == 'yes':

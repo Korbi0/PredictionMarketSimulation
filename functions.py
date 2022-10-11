@@ -2,7 +2,7 @@ import numpy as np
 from scipy.stats import norm, truncnorm
 from matplotlib import pyplot as plt
 
-from classes import Market_Participant_binary, Market_Participant_continuous, Market
+from classes import Market_Participant_binary, Market_Participant_continuous, DoubleAuctionMarket
 
 import random
 
@@ -10,6 +10,11 @@ random.seed(1)
 
 def get_expected_income(expected_value, aleatory_uncertainty):
   return norm(loc=expected_value, scale=aleatory_uncertainty).expect(lambda x: x, lb=0, ub=1.)
+
+
+
+
+
 
 
 def expected_income(exp_v, exp_a_unc, ep_unc_exp_v, ep_unc_a_unc, resolution1, distribution1="norm", distribution2="norm"):
@@ -70,7 +75,7 @@ def plot_distribution(dist, resolution):
 
 def run_single_market(true_value, number_of_participants, number_of_iterations, config):
 
-    market = Market(true_value, number_of_participants, number_of_iterations, config['mode'], config['exchange_fee'], config['pright'])
+    market = DoubleAuctionMarket(true_value, number_of_participants, number_of_iterations, config['mode'], config['exchange_fee'], config['pright'])
 
 
     p = market.run()
