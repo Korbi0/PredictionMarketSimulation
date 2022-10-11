@@ -5,7 +5,7 @@ from participants import get_participant
 seed(1)
 
 class ExperimentSeries():
-    def __init__(self, mode, list_of_participant_numbers, pright=0.5, experiments_per_number=10):
+    def __init__(self, mode, list_of_participant_numbers, pright=0.5, experiments_per_number=10, take_market_uncertainty_into_account=False):
         """
         mode: either 'binary' or 'index'
         list_of_participant_numbers: list of numbers of participants to run the experiment for
@@ -19,8 +19,9 @@ class ExperimentSeries():
         self.list_of_participant_numbers = list_of_participant_numbers
         self.pright = pright
         self.experiments_per_number = experiments_per_number
+        self.take_market_uncertainty_into_account = take_market_uncertainty_into_account
 
-    def run(self):
+    def run_series(self):
         for p in self.list_of_participant_numbers:
             results, uncertainties = self.run_experiments(p)
             if self.mode == 'binary':
@@ -37,15 +38,26 @@ class ExperimentSeries():
 
         for i in range(self.experiments_per_number):
             true_value = random()
-            experiment = Experiment(true_value=true_value, number_of_participants=participants_and_iterations, number_of_trading_rounds=participants_and_iterations, mode=self.mode, pright=self.pright)
-            output = experiment.run()
+            experiment = Experiment(true_value=true_value,
+                                        number_of_participants=participants_and_iterations,
+                                        number_of_trading_rounds=participants_and_iterations,
+                                        mode=self.mode,
+                                        pright=self.pright,
+                                        take_market_uncertainty_into_account=self.take_market_uncertainty_into_account)
+            output = experiment.run_experiment()
             self.experiments.append(experiment)
             results.append(output[0])
             uncertainties.append(output[1])
         return results, uncertainties
 
 class Experiment():
-    def __init__(self, true_value: float, number_of_participants: int, number_of_trading_rounds: int, mode: str, market_class=DoubleAuctionMarket, pright=0.5, exchange_fee=0.0):
+    def __init__(self, true_value: float,
+                    number_of_participants: int,
+                    number_of_trading_rounds: int,
+                    mode: str, market_class=DoubleAuctionMarket,
+                    pright=0.5,
+                    exchange_fee=0.0,
+                    take_market_uncertainty_into_account=False):
         self.true_value = true_value
         if mode == 'binary':
             self.true_value = round(self.true_value)
@@ -53,12 +65,12 @@ class Experiment():
         self.number_of_trading_rounds = number_of_trading_rounds
         self.mode = mode
         self.pright = pright
-        self.traders = [get_participant(true_value=self.true_value, mode=self.mode, pright=self.pright) for b in range(number_of_participants)]
+        self.traders = [get_participant(true_value=self.true_value, mode=self.mode, pright=self.pright, take_market_uncertainty_into_account=take_market_uncertainty_into_account) for b in range(number_of_participants)]
         self.market = market_class(x=true_value, traders=self.traders, mode=self.mode, pright=self.pright, exchange_fee=exchange_fee)
         self.uncertainties = []
     
-    def run(self):
-        self.yes_prices, self.no_prices = self.market.run(self.number_of_trading_rounds)
+    def run_experiment(self):
+        self.yes_prices, self.no_prices = self.market.run_market(self.number_of_trading_rounds)
         self.uncertainties = self.market.uncertainties
         if len(self.yes_prices) > 0:
             res = np.mean(self.yes_prices)
@@ -72,5 +84,8 @@ class Experiment():
             raise ValueError("mode must be binary or index")
 
 def run_experiment_series(list_of_participant_numbers, config, n=10, true_value=None):
-    series = ExperimentSeries(mode=config['mode'], list_of_participant_numbers=list_of_participant_numbers, experiments_per_number=n, pright=config['pright'])
-    return series.run()
+    series = ExperimentSeries(mode=config['mode'],
+        list_of_participant_numbers=list_of_participant_numbers,
+        experiments_per_number=n, pright=config['pright'],
+        take_market_uncertainty_into_account=config['take_market_uncertainty_into_account'])
+    return series.run_series()

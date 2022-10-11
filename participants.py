@@ -5,7 +5,7 @@ random.seed(1)
 
 from mathtools import *
 
-def get_participant(true_value, mode, credence_distribution=truncated_distribution, pright=.5):
+def get_participant(true_value, mode, take_market_uncertainty_into_account=False, credence_distribution=truncated_distribution, pright=.5):
 
   """
   pright comes into action only for participants in binary markets.
@@ -34,11 +34,12 @@ def get_participant(true_value, mode, credence_distribution=truncated_distributi
       # Mode is index
       expected_result = np.random.uniform(0., 1.)
 
-
-
       epistemic_uc_about_outcome = abs(true_value - expected_result)
 
-      participant = Market_Participant_continuous(expected_result, epistemic_uc_about_outcome, credence_distribution)
+      participant = Market_Participant_continuous(expected_result,
+                                                    epistemic_uc_about_outcome,
+                                                    credence_distribution,
+                                                    take_market_uncertainty_into_account=take_market_uncertainty_into_account)
 
       return participant
 
@@ -90,7 +91,7 @@ class Market_Participant_continuous():
   uncertainty
 
   """
-  def __init__(self, expected_result, uncertainty, credence_distribution):
+  def __init__(self, expected_result, uncertainty, credence_distribution, take_market_uncertainty_into_account=False):
 
     self.expected_result = expected_result
 
@@ -100,6 +101,10 @@ class Market_Participant_continuous():
 
     self.expected_income_of_share = self.credence.expect(lambda x: x, lb=0., ub=1.)
 
+    self.take_market_uncertainty_into_account = take_market_uncertainty_into_account
+
+
+
 
   def decide_on_buy(self, offered_price, market_uncertainty=None):
 
@@ -107,7 +112,7 @@ class Market_Participant_continuous():
 
 
     
-    if not market_uncertainty:
+    if not self.take_market_uncertainty_into_account or not market_uncertainty:
       return expected_value > 0.
     else:
       # A trader who takes market certaity into account will be more likely to trade if his own uncertainty is lower than that of the market
@@ -120,7 +125,7 @@ class Market_Participant_continuous():
     
     expected_value = - self.expected_income_of_share + price
 
-    if not market_uncertainty:
+    if not self.take_market_uncertainty_into_account or not market_uncertainty:
       return expected_value > 0.
     else:
       # A trader who takes market certaity into account will be more likely to trade if his own uncertainty is lower than that of the market

@@ -1,6 +1,6 @@
 import random
 import numpy as np
-
+from math import isnan
 
 random.seed(1)
 
@@ -13,7 +13,7 @@ class Market_Generic():
     self.no_prices = [] # List of prices at which bets on 'no' have been traded
     
 
-  def run(self, trading_rounds):
+  def run_market(self, trading_rounds):
     for i in range(trading_rounds):
       trade = self.trading_round()
       if trade is None:
@@ -44,7 +44,7 @@ class DoubleAuctionMarket(Market_Generic):
       self.exchange_fee = exchange_fee
       self.traders = traders
       assert(len(self.traders) > 0)
-      self.prices = []
+      self.yes_prices = []
       self.uncertainties = []
       self.pright = pright
 
@@ -63,8 +63,10 @@ class DoubleAuctionMarket(Market_Generic):
       seller_price = proposed_price - self.exchange_fee
       buyer_price = proposed_price + self.exchange_fee
       if seller.decide_on_sell(seller_price, self.uncertainty) and buyer.decide_on_buy(buyer_price, self.uncertainty):
-          self.uncertainty = np.std(self.prices) + (1 / (len(self.prices) + 1))
-          self.uncertainties.append(self.uncertainty)
+          uncertainty = np.std(self.yes_prices) + (1 / (len(self.yes_prices) + 1))
+          if not isnan(uncertainty):
+            self.uncertainty = uncertainty
+            self.uncertainties.append(self.uncertainty)
           return {'direction': 'yes', 'price': proposed_price, 'buyer': buyer, 'seller': seller}
       else:
         return None
