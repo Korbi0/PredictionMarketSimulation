@@ -1,18 +1,13 @@
 import sympy as sp
+from sympy.abc import b, x, y
 import numpy as np
 from scipy.stats import norm, truncnorm
 from matplotlib import pyplot as plt
 
 
-lmsr_cost = sp.Symbol('b') * sp.log(sp.exp(sp.Symbol('x')/sp.Symbol('b')) + sp.exp(sp.Symbol('y')/sp.Symbol('b')))
+lmsr_cost = sp.Symbol('b') * sp.log(sp.exp(-sp.Symbol('x')/sp.Symbol('b')) + sp.exp(-sp.Symbol('y')/sp.Symbol('b')))
 
-def lmsr_cost_function(b, x, y):
-  """
-  b: liquidity parameter
-  x: amount owed if no
-  y: amount owed if yes
-  """
-  return b * np.log(np.exp(x/b) + np.exp(y/b))
+lmsr_cost_function = sp.lambdify((b, x, y), lmsr_cost, "numpy")
 
 
 def truncated_distribution(mean, std, lower_bound, upper_bound):
